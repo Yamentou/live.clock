@@ -205,10 +205,47 @@
         // ----- State -----
         let is24Hour = true;
         let isDark = false;
+        const settingsStorageKey = 'liveClockSettings';
+        const settingsLifetime = 365 * 24 * 60 * 60 * 1000;
+
+        function loadSettings() {
+            try {
+                const stored = JSON.parse(localStorage.getItem(settingsStorageKey));
+                if (!stored || Date.now() - stored.savedAt > settingsLifetime) {
+                    localStorage.removeItem(settingsStorageKey);
+                    return null;
+                }
+                return stored;
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function saveSettings() {
+            try {
+                localStorage.setItem(settingsStorageKey, JSON.stringify({
+                    savedAt: Date.now(),
+                    is24Hour,
+                    isDark,
+                    dateVisible: !dateEl.classList.contains('hidden'),
+                    controlsVisible: !controlsWrapper.classList.contains('controls-hidden')
+                }));
+            } catch (error) {
+                // Storage may be unavailable in private browsing or restricted contexts.
+            }
+        }
 
         // ----- Initial dark mode from system -----
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        isDark = prefersDark;
+        const savedSettings = loadSettings();
+        is24Hour = savedSettings?.is24Hour ?? true;
+        isDark = savedSettings?.isDark ?? prefersDark;
+        if (savedSettings?.dateVisible === false) {
+            dateEl.classList.add('hidden');
+        }
+        if (savedSettings?.controlsVisible === false) {
+            controlsWrapper.classList.add('controls-hidden');
+        }
         if (isDark) {
             document.documentElement.classList.add('dark');
             darkLabel.textContent = 'Dark';
@@ -231,6 +268,7 @@
                 darkLabel.textContent = 'Light';
                 darkToggle.querySelector('i').className = 'fas fa-sun';
             }
+            saveSettings();
         });
 
         // ----- Toggle format -----
@@ -238,6 +276,7 @@
             is24Hour = !is24Hour;
             formatLabel.textContent = is24Hour ? '24h' : '12h';
             updateClock();
+            saveSettings();
         });
 
         // ----- Fullscreen toggle -----
@@ -275,14 +314,17 @@
         // ----- Date toggle -----
         dateToggle.addEventListener('click', () => {
             dateEl.classList.toggle('hidden');
+            saveSettings();
         });
 
         // ----- Hide / show controls -----
         hideControls.addEventListener('click', () => {
             controlsWrapper.classList.add('controls-hidden');
+            saveSettings();
         });
         showControls.addEventListener('click', () => {
             controlsWrapper.classList.remove('controls-hidden');
+            saveSettings();
         });
 
         // ----- Clock update function -----
@@ -315,6 +357,7 @@
 
         // ----- Start the clock -----
         updateFullscreenButton();
+        formatLabel.textContent = is24Hour ? '24h' : '12h';
         updateClock();
         updateDate();
         setInterval(updateClock, 1000);
