@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live Clock</title>
+
+    <!-- Google Font: Oswald (700) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&display=swap" rel="stylesheet" />
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+    <style>
+        /* Reset & full-height with dynamic viewport */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #app {
+            min-height: 100dvh; /* Dynamic viewport height – best for mobile */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100dvh;
+            overflow: hidden;
+            position: relative;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* Clock styling with Oswald */
+        #clock {
+            font-family: 'Oswald', sans-serif;
+            font-weight: 700;
+            /* Keep the complete time inside the viewport on both axes. */
+            font-size: clamp(2.5rem, min(55dvh, 16vw), 20rem);
+            line-height: 1;
+            letter-spacing: 0.04em;  /* crisp spacing for Oswald */
+            user-select: none;
+            transition: color 0.3s, background-color 0.3s;
+            text-align: center;
+            display: inline-block;
+            max-width: 100%;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+            padding: 0 0.5rem; /* tiny side padding for ultra-small screens */
+            box-sizing: border-box;
+        }
+
+        #date {
+            font-family: 'Oswald', sans-serif;
+            font-weight: 700;
+            font-size: calc(clamp(2.5rem, min(55dvh, 16vw), 20rem) * 0.2);
+            line-height: 1.2;
+            letter-spacing: 0.04em;
+            text-align: center;
+            margin-top: 0.5rem;
+            opacity: 1;
+            transition: opacity 0.2s ease, color 0.3s ease;
+            user-select: none;
+        }
+
+        #date.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Smooth transitions for everything */
+        * {
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        /* Control buttons – responsive scaling */
+        .controls-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 0.2rem 0.5rem;
+            border-radius: 9999px;
+            font-size: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            color: inherit;
+            opacity: 0.75;
+            transition: opacity 0.2s, background-color 0.2s;
+            white-space: nowrap;
+        }
+        .controls-btn:hover {
+            opacity: 1;
+            background-color: rgba(128, 128, 128, 0.15);
+        }
+        .controls-btn:focus-visible {
+            outline: 2px solid currentColor;
+            outline-offset: 2px;
+        }
+
+        /* Hide controls container, show the reveal button */
+        .controls-hidden #controls {
+            display: none !important;
+        }
+        .controls-hidden #showControls {
+            display: inline-flex !important;
+        }
+
+        /* Initially hide the reveal button */
+        #showControls {
+            display: none;
+        }
+
+        /* Light / Dark mode background overrides */
+        body {
+            background-color: #f3f4f6; /* gray-100 */
+            color: #1f2937; /* gray-800 */
+        }
+        .dark body {
+            background-color: #111827; /* gray-900 */
+            color: #f9fafb; /* gray-50 */
+        }
+
+        /* Control panel backdrop and size */
+        #controls {
+            transition: background-color 0.3s, backdrop-filter 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <!-- Main app container -->
+    <div id="app">
+
+        <!-- Clock display -->
+        <div id="clock">00:00:00</div>
+        <div id="date">Thursday, August 6, 2026</div>
+
+        <!-- Controls wrapper (positioned at bottom) -->
+        <div id="controlsWrapper" class="absolute bottom-3 sm:bottom-6 flex flex-col items-center gap-2 px-2 w-full pointer-events-none">
+            <!-- The actual clickable panel -->
+            <div id="controls" class="pointer-events-auto flex flex-wrap justify-center gap-1 sm:gap-3 items-center text-[0.65rem] xs:text-xs sm:text-sm bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm px-2 sm:px-4 py-1.5 sm:py-2 rounded-full shadow-lg border border-white/20 dark:border-gray-700/30">
+
+                <!-- Dark mode toggle -->
+                <button id="darkToggle" class="controls-btn" title="Toggle dark/light mode">
+                    <i class="fas fa-sun text-[0.7rem] sm:text-sm"></i>
+                    <span id="darkLabel" class="hidden xs:inline">Light</span>
+                </button>
+
+                <!-- Format toggle -->
+                <button id="formatToggle" class="controls-btn" title="Toggle 12/24 hour format">
+                    <i class="fas fa-clock text-[0.7rem] sm:text-sm"></i>
+                    <span id="formatLabel" class="hidden xs:inline">24h</span>
+                </button>
+
+                <!-- Full screen toggle -->
+                <button id="fullscreenToggle" class="controls-btn" title="Toggle full screen">
+                    <i id="fullscreenIcon" class="fas fa-expand text-[0.7rem] sm:text-sm"></i>
+                    <span id="fullscreenLabel" class="hidden xs:inline">Fullscreen</span>
+                </button>
+
+                <!-- Date toggle -->
+                <button id="dateToggle" class="controls-btn" title="Show or hide the date">
+                    <i id="dateToggleIcon" class="fas fa-calendar text-[0.7rem] sm:text-sm"></i>
+                    <span id="dateToggleLabel" class="hidden xs:inline">Date</span>
+                </button>
+
+                <!-- Hide controls -->
+                <button id="hideControls" class="controls-btn" title="Hide controls">
+                    <i class="fas fa-eye-slash text-[0.7rem] sm:text-sm"></i>
+                    <span class="hidden xs:inline">Hide</span>
+                </button>
+            </div>
+
+            <!-- Reveal button (appears when controls are hidden) -->
+            <button id="showControls" class="pointer-events-auto controls-btn bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm px-3 sm:px-4 py-1 sm:py-1.5 rounded-full shadow-lg border border-white/20 dark:border-gray-700/30 text-[0.65rem] xs:text-xs sm:text-sm" title="Show controls">
+                <i class="fas fa-eye"></i>
+                <span>Show controls</span>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ----- DOM refs -----
+        const clockEl = document.getElementById('clock');
+        const darkToggle = document.getElementById('darkToggle');
+        const formatToggle = document.getElementById('formatToggle');
+        const fullscreenToggle = document.getElementById('fullscreenToggle');
+        const fullscreenIcon = document.getElementById('fullscreenIcon');
+        const fullscreenLabel = document.getElementById('fullscreenLabel');
+        const dateToggle = document.getElementById('dateToggle');
+        const dateEl = document.getElementById('date');
+        const hideControls = document.getElementById('hideControls');
+        const showControls = document.getElementById('showControls');
+        const controlsWrapper = document.getElementById('controlsWrapper');
+        const darkLabel = document.getElementById('darkLabel');
+        const formatLabel = document.getElementById('formatLabel');
+
+        // ----- State -----
+        let is24Hour = true;
+        let isDark = false;
+
+        // ----- Initial dark mode from system -----
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        isDark = prefersDark;
+        if (isDark) {
+            document.documentElement.classList.add('dark');
+            darkLabel.textContent = 'Dark';
+            darkToggle.querySelector('i').className = 'fas fa-moon';
+        } else {
+            document.documentElement.classList.remove('dark');
+            darkLabel.textContent = 'Light';
+            darkToggle.querySelector('i').className = 'fas fa-sun';
+        }
+
+        // ----- Toggle dark mode -----
+        darkToggle.addEventListener('click', () => {
+            isDark = !isDark;
+            if (isDark) {
+                document.documentElement.classList.add('dark');
+                darkLabel.textContent = 'Dark';
+                darkToggle.querySelector('i').className = 'fas fa-moon';
+            } else {
+                document.documentElement.classList.remove('dark');
+                darkLabel.textContent = 'Light';
+                darkToggle.querySelector('i').className = 'fas fa-sun';
+            }
+        });
+
+        // ----- Toggle format -----
+        formatToggle.addEventListener('click', () => {
+            is24Hour = !is24Hour;
+            formatLabel.textContent = is24Hour ? '24h' : '12h';
+            updateClock();
+        });
+
+        // ----- Fullscreen toggle -----
+        function updateFullscreenButton() {
+            const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
+            if (isFullscreen) {
+                fullscreenIcon.className = 'fas fa-compress text-[0.7rem] sm:text-sm';
+                fullscreenLabel.textContent = 'Exit';
+            } else {
+                fullscreenIcon.className = 'fas fa-expand text-[0.7rem] sm:text-sm';
+                fullscreenLabel.textContent = 'Fullscreen';
+            }
+        }
+
+        fullscreenToggle.addEventListener('click', async () => {
+            if (!document.fullscreenElement) {
+                try {
+                    await document.documentElement.requestFullscreen?.();
+                } catch (error) {
+                    console.error('Fullscreen request failed', error);
+                }
+            } else {
+                try {
+                    await document.exitFullscreen?.();
+                } catch (error) {
+                    console.error('Fullscreen exit failed', error);
+                }
+            }
+        });
+
+        document.addEventListener('fullscreenchange', updateFullscreenButton);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+        document.addEventListener('mozfullscreenchange', updateFullscreenButton);
+
+        // ----- Date toggle -----
+        dateToggle.addEventListener('click', () => {
+            dateEl.classList.toggle('hidden');
+        });
+
+        // ----- Hide / show controls -----
+        hideControls.addEventListener('click', () => {
+            controlsWrapper.classList.add('controls-hidden');
+        });
+        showControls.addEventListener('click', () => {
+            controlsWrapper.classList.remove('controls-hidden');
+        });
+
+        // ----- Clock update function -----
+        function updateClock() {
+            const now = new Date();
+            let hours = now.getHours();
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            let timeStr;
+
+            if (is24Hour) {
+                const hh = String(hours).padStart(2, '0');
+                timeStr = `${hh}:${minutes}:${seconds}`;
+            } else {
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                let h12 = hours % 12;
+                if (h12 === 0) h12 = 12;
+                const hh = String(h12).padStart(2, '0');
+                timeStr = `${hh}:${minutes}:${seconds} ${ampm}`;
+            }
+            clockEl.textContent = timeStr;
+        }
+
+        // ----- Date update -----
+        function updateDate() {
+            const now = new Date();
+            const options = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
+            dateEl.textContent = now.toLocaleDateString('en-US', options);
+        }
+
+        // ----- Start the clock -----
+        updateFullscreenButton();
+        updateClock();
+        updateDate();
+        setInterval(updateClock, 1000);
+
+        // Listen for system theme changes (optional, but keeps initial state consistent)
+        // We don't override manual toggle – only respects system on initial load.
+    </script>
+</body>
+</html>
